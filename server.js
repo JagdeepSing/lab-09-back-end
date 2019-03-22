@@ -24,7 +24,7 @@ client.on('error', err => console.error(err));
 app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/meetups', getMeetups);
-// TODO: app.get('/yelp', getYelp);
+app.get('/yelp', getYelps);
 // TODO: app.get('/trails', getTrails);
 app.get('/movies', getMovies);
 
@@ -58,6 +58,7 @@ function getSqlData(sqlInfo) {
 
   // return data
   try {
+    console.log('returning sql data for ', sqlInfo.endpoint);
     return client.query(sql, values);
   } catch(error) {
     handleError(error);
@@ -82,15 +83,18 @@ const timeouts = {
  * @param {object} sqlData
  */
 function checkTimeouts(sqlInfo, sqlData) {
+  console.log('check timeouts ', sqlInfo.endpoint);
   if (sqlData.rowCount > 0) {
     let ageOfResults = Date.now() - sqlData.rows[0].created_at;
 
     if (ageOfResults > timeouts[sqlInfo.endpoint]) {
+      console.log('too old');
       let sql = `DELETE FROM ${sqlInfo.endpoint}s WHERE location_id=$1;`;
       let values = [sqlInfo.location_id];
       client.query(sql, values);
       return;
     }
+    console.log('young');
     return sqlData;
   }
 }
@@ -113,16 +117,12 @@ function getLocation(req, res) {
     // .then(sqlData => checkTimeouts(sqlInfo, sqlData))
     .then(result => {
       if (result.rowCount > 0) {
-        console.log(result);
-        console.log('returning location info');
         res.send(result.rows[0]);
       } else {
-        console.log('requesting api data');
         const apiUrl = `https://maps.googleapis.com/maps/api/geocode/json?key=${process.env.GOOGLE_MAPS_API_KEY}&address=${req.query.data}`;
 
         superagent.get(apiUrl)
           .then(apiData => {
-            console.log('superagent then');
             if (!apiData.body.results.length) {
               throw 'NO LOCATION DATA FROM API';
             } else {
@@ -212,7 +212,6 @@ function getMeetups(req, res) {
         res.send(result.rows);
       } else {
         const apiURL = `https://api.meetup.com/find/upcoming_events?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&sign=true&photo-host=public&page=20&key=${process.env.MEETUP_API_KEY}`;
-
         superagent.get(apiURL)
           .then(apiData => {
             if (!apiData.body.events.length) {
@@ -220,7 +219,7 @@ function getMeetups(req, res) {
             } else {
               const events = apiData.body.events.map(event => {
                 let event_info = new Event(event);
-                event_info.id = sqlInfo.location_id; //TODO:
+                event_info.id = sqlInfo.location_id;
 
                 let insertSQL = `INSERT INTO meetups (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
                 let newValues = Object.values(event_info);
@@ -247,16 +246,64 @@ function getMovies(req, res) {
     .then(result => {
       if (result) { res.send(result.rows); }
       else {
-        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
+        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_DB_API_KEY}&language=en-US&page=1&include_adult=false&query=${req.query.data}`;
 
         superagent.get(apiUrl)
           .then(apiData => {
-            if (/** api data not available */) {
+            if (!apiData.body.results.length) {
               throw 'NO DATA FROM API';
             } else {
-              /** do something with api data */
+              const movies = apiData.body.results.map(movie => {
+                let movie_info = new Movie(movie);
+                movie_info.id = sqlInfo.location_id;
+
+                let insertSQL = `INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+                let newValues = Object.values(movie_info);
+
+                client.query(insertSQL, newValues);
+                return movie_info;
+              });
+              res.send(movies);
             }
           });
+      }
+    })
+    .catch(error => handleError(error));
+}
+
+function getYelps(req, res) {
+  let sqlInfo = {
+    endpoint: 'movie',
+    id_name: 'location_id',
+    id: req.query.data.id,
+  }
+  getSqlData(sqlInfo)
+    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+    .then(result => {
+      if (result) { res.send(result.rows); }
+      else {
+        const apiUrl = `https://api.yelp.com/v3/businesses/search?latitude=${req.query.data.latitude}&longitude=${req.query.data.longitude}`;
+
+        superagent.get(apiUrl)
+          .set({'Authorization': `Bearer ${process.env.YELP_API_KEY}`})
+          .then(apiData => {
+            if (!apiData.body.businesses) {
+              throw 'NO DATA FROM API';
+            } else {
+              const businesses = apiData.body.businesses.map(store => {
+                let store_info = new Store(store);
+                store_info.id = sqlInfo.id;
+
+                let insertSQL = `INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+                let newValues = Object.values(store_info);
+
+                client.query(insertSQL, newValues);
+                return store_info;
+              });
+              res.send(businesses);
+            }
+          })
+          .catch(error => handleError(error));
       }
     })
     .catch(error => handleError(error));
@@ -287,30 +334,6 @@ function getMovies(req, res) {
 //     .catch(error => handleError(error));
 // }
 
-// function getYelps(req, res) {
-//   let sqlInfo = {
-//     endpoint: 'movie',
-//     id: req.query.data.id,
-//   }
-//   getSqlData(sqlInfo)
-//     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
-//     .then(result => {
-//       if (result) { res.send(result.rows); }
-//       else {
-//         const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
-
-//         superagent.get(apiUrl)
-//           .then(apiData => {
-//             if (/** api data not available */) {
-//               throw 'NO DATA FROM API';
-//             } else {
-//               /** do something with api data */
-//             }
-//           });
-//       }
-//     })
-//     .catch(error => handleError(error));
-// }
 
 // Event object constructor
 function Event(data){
@@ -334,6 +357,26 @@ function Location(data, query) {
 function Forecast(day) {
   this.forecast = day.summary;
   this.time = formatTime(day.time*1000);
+  this.created_at = Date.now();
+}
+
+function Store(store) {
+  this.name = store.name;
+  this.image_url = store.image_url;
+  this.price = store.price;
+  this.rating = store.rating;
+  this.url = store.url;
+  this.created_at = Date.now();
+}
+
+function Movie(movie) {
+  this.title = movie.title;
+  this.overview = movie.overview;
+  this.average_votes = movie.vote_average;
+  this.total_votes = movie.vote_count;
+  this.image_url = `https://image.tmdb.org/t/p/w200_and_h300_bestv2${movie.poster_path}`;
+  this.popularity = movie.popularity;
+  this.released_on = movie.release_date;
   this.created_at = Date.now();
 }
 
