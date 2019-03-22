@@ -52,7 +52,6 @@ function handleError(err, res) {
 function getSqlData(sqlInfo) {
   let sql = `SELECT * FROM ${sqlInfo.endpoint}s WHERE $1=$2;`;
   let values = Object.values(sqlInfo).slice(1);
-  console.log(values);
 
   console.log('getting sql data for ', sqlInfo.endpoint);
 

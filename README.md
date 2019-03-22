@@ -44,7 +44,7 @@ Technologies used:
 
 03-21-2019: Added sql database for data recieved from APIs for location, weather and meetups route. Deployed to heroku with postgresql.
 
-03-22-2019: Added cache invalidation for database data.
+03-22-2019: Added cache invalidation for database data. Also added routes /movies and /yelp
 
 ## Credits and Collaborations
 
