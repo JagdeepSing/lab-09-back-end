@@ -26,7 +26,7 @@ app.get('/weather', getWeather);
 app.get('/meetups', getMeetups);
 // TODO: app.get('/yelp', getYelp);
 // TODO: app.get('/trails', getTrails);
-// TODO: app.get('/movies', getMovies);
+app.get('/movies', getMovies);
 
 // port location of server, once its running
 app.listen(PORT, () => console.log(`Listening on PORT ${PORT}`));
@@ -35,7 +35,6 @@ app.listen(PORT, () => console.log(`Listening on PORT ${PORT}`));
  *  outputs error to console
  *  if res parameter is passed, also sends response with 500 status code
  *  and error message
- * 
  * @param {string} err, error that is outputed
  * @param {object} res, express response
  */
@@ -51,8 +50,11 @@ function handleError(err, res) {
  *  @param {object} sqlInfo, object with keys endpoint and id
  */
 function getSqlData(sqlInfo) {
-  let sql = `SELECT * FROM ${sqlInfo.endpoint}s WHERE location_id=$1;`;
-  let values = [sqlInfo.id];
+  let sql = `SELECT * FROM ${sqlInfo.endpoint}s WHERE $1=$2;`;
+  let values = Object.values(sqlInfo).slice(1);
+  console.log(values);
+
+  console.log('getting sql data for ', sqlInfo.endpoint);
 
   // return data
   try {
@@ -73,11 +75,11 @@ const timeouts = {
 }
 
 /**
- * check age of data, 
+ * check age of data,
  *  if its within our timeout limit returns data
  *  else delete data from database and returns undefined
- * @param {object} sqlInfo 
- * @param {object} sqlData 
+ * @param {object} sqlInfo
+ * @param {object} sqlData
  */
 function checkTimeouts(sqlInfo, sqlData) {
   if (sqlData.rowCount > 0) {
@@ -85,7 +87,7 @@ function checkTimeouts(sqlInfo, sqlData) {
 
     if (ageOfResults > timeouts[sqlInfo.endpoint]) {
       let sql = `DELETE FROM ${sqlInfo.endpoint}s WHERE location_id=$1;`;
-      let values = [sqlInfo.id];
+      let values = [sqlInfo.location_id];
       client.query(sql, values);
       return;
     }
@@ -94,76 +96,65 @@ function checkTimeouts(sqlInfo, sqlData) {
 }
 
 /**
- *  retrives location information from local database or 
+ *  retrives location information from local database or
  *  maps.google.com if new location
- * 
  *  sends data back by express response object
- * 
  * @param {object} req, express request
  * @param {object} res, express response
  */
 function getLocation(req, res) {
-  let query = req.query.data;
+  let sqlInfo = {
+    endpoint: 'location',
+    property_name: 'search_query',
+    search_query: req.query.data,
+  }
 
-  // Define the search query
-  let sql = `SELECT * FROM locations WHERE search_query=$1;`;
-  let values = [query]; // always an array
-
-  // make the query of the database
-  client.query(sql, values)
-    .then(sqlResult => {
-      // check if location was found
-      if (sqlResult.rowCount > 0) {
-        res.send(sqlResult.rows[0]);
+  getSqlData(sqlInfo)
+    // .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+    .then(result => {
+      if (result.rowCount > 0) {
+        console.log(result);
+        console.log('returning location info');
+        res.send(result.rows[0]);
       } else {
-        // if not found in sql, get from API
-        const mapsURL = `https://maps.googleapis.com/maps/api/geocode/json?key=${process.env.GOOGLE_MAPS_API_KEY}&address=${query}`;
+        console.log('requesting api data');
+        const apiUrl = `https://maps.googleapis.com/maps/api/geocode/json?key=${process.env.GOOGLE_MAPS_API_KEY}&address=${req.query.data}`;
 
-        superagent.get(mapsURL)
-          //if successfully obtained API data
+        superagent.get(apiUrl)
           .then(apiData => {
-            if (!apiData.body.results.length) { 
-              throw 'NO LOCATION DATA'; 
+            console.log('superagent then');
+            if (!apiData.body.results.length) {
+              throw 'NO LOCATION DATA FROM API';
             } else {
               let location = new Location(apiData.body.results[0], req.query);
-              
-              //inserting new data into the database
-              let insertSql = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES($1, $2, $3, $4) RETURNING id;`;
+
+              let insertSql = `INSERT INTO locations (search_query, formatted_query, latitude, longitude, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id;`;
               let newValues = Object.values(location);
-              
-              // make query
+
               client.query(insertSql, newValues)
-                //if successfully inserted into database
                 .then(sqlReturn => {
-                  // attach returned id onto the location object
                   location.id = sqlReturn.rows[0].id;
                   res.send(location);
-                })
-                //if not successfully inputted into database, catch error
-                .catch(error => handleError(error));
+                });
             }
-          })
-          //if not successfully obtained API data, catch error
-          .catch(error => handleError(error));
+          });
       }
     })
-    //anything related to getting data out of the database
     .catch(error => handleError(error));
 }
 
 /**
- *  retrives 8-day weather forecast from local database or 
+ *  retrives 8-day weather forecast from local database or
  *  darksky.net if data is outdated
- * 
  *  sends data back by express response object
- * 
  * @param {object} req, express request
  * @param {object} res, express response
  */
 function getWeather(req, res) {
   let sqlInfo = {
     endpoint: 'weather',
-    id: req.query.data.id,
+    id_name: 'location_id',
+    location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
@@ -175,14 +166,14 @@ function getWeather(req, res) {
 
         superagent.get(weatherApiUrl)
           .then(apiData => {
-            if (apiData.body.daily.data.length === 0) {
+            if (!apiData.body.daily.data.length) {
               throw 'NO WEATHER DATA FROM API';
             } else {
               const weatherSummaries = apiData.body.daily.data.map(day => {
                 let forecast =  new Forecast(day);
-                forecast.id = sqlInfo.id;
+                forecast.id = sqlInfo.location_id;
 
-                let insertSQL = 'INSERT INTO weathers (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);';
+                let insertSQL = `INSERT INTO weathers (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
                 let newValues = Object.values(forecast);
 
                 client.query(insertSQL, newValues);
@@ -198,47 +189,48 @@ function getWeather(req, res) {
 }
 
 /**
- *  retrives upcoming meetups from local database or 
+ *  retrives upcoming meetups from local database or
  *  meetups.com if data is outdated
- * 
+ *
  *  sends data back by express response object
- * 
+ *
  * @param {object} req, express request
  * @param {object} res, express response
  * @return {array} array of event objects
  */
 function getMeetups(req, res) {
-  let locID = req.query.data.id;
+  let sqlInfo = {
+    endpoint: 'meetup',
+    id_name: 'location_id',
+    location_id: req.query.data.id,
+  }
 
-  let sql = `SELECT * FROM meetups WHERE location_id=$1;`;
-  let values = [locID];
-
-  client.query(sql, values)
-    .then(sqlResult => {
-      if (sqlResult.rowCount > 0) {
-        res.send(sqlResult.rows);
+  getSqlData(sqlInfo)
+    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+    .then(result => {
+      if (result) {
+        res.send(result.rows);
       } else {
-        const meetup_url = `https://api.meetup.com/find/upcoming_events?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&sign=true&photo-host=public&page=20&key=${process.env.MEETUP_API_KEY}`;
+        const apiURL = `https://api.meetup.com/find/upcoming_events?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&sign=true&photo-host=public&page=20&key=${process.env.MEETUP_API_KEY}`;
 
-        superagent.get(meetup_url)
-          .then (apiData => {
-            if (apiData.body.events.length === 0) {
-              throw 'NO EVENT DATA';
+        superagent.get(apiURL)
+          .then(apiData => {
+            if (!apiData.body.events.length) {
+              throw 'NO EVENT DATA FROM API';
             } else {
               const events = apiData.body.events.map(event => {
                 let event_info = new Event(event);
-                event_info.id = locID;
+                event_info.id = sqlInfo.location_id; //TODO:
 
-                let insertSql = `INSERT INTO meetups (link, name, creation_date, host, location_id) VALUES ($1, $2, $3, $4, $5);`;
-                let values = Object.values(event_info);
+                let insertSQL = `INSERT INTO meetups (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
+                let newValues = Object.values(event_info);
 
-                client.query(insertSql, values);
+                client.query(insertSQL, newValues);
                 return event_info;
               });
               res.send(events);
             }
-          })
-          .catch(error => handleError(error));
+          });
       }
     })
     .catch(error => handleError(error));
@@ -247,7 +239,8 @@ function getMeetups(req, res) {
 function getMovies(req, res) {
   let sqlInfo = {
     endpoint: 'movie',
-    id: req.query.data.id,
+    id_name: 'location_id',
+    location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
@@ -269,55 +262,55 @@ function getMovies(req, res) {
     .catch(error => handleError(error));
 }
 
-function getTrails(req, res) {
-  let sqlInfo = {
-    endpoint: 'movie',
-    id: req.query.data.id,
-  }
-  getSqlData(sqlInfo)
-    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
-    .then(result => {
-      if (result) { res.send(result.rows); }
-      else {
-        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
+// function getTrails(req, res) {
+//   let sqlInfo = {
+//     endpoint: 'movie',
+//     id: req.query.data.id,
+//   }
+//   getSqlData(sqlInfo)
+//     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+//     .then(result => {
+//       if (result) { res.send(result.rows); }
+//       else {
+//         const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
 
-        superagent.get(apiUrl)
-          .then(apiData => {
-            if (/** api data not available */) {
-              throw 'NO DATA FROM API';
-            } else {
-              /** do something with api data */
-            }
-          });
-      }
-    })
-    .catch(error => handleError(error));
-}
+//         superagent.get(apiUrl)
+//           .then(apiData => {
+//             if (/** api data not available */) {
+//               throw 'NO DATA FROM API';
+//             } else {
+//               /** do something with api data */
+//             }
+//           });
+//       }
+//     })
+//     .catch(error => handleError(error));
+// }
 
-function getYelps(req, res) {
-  let sqlInfo = {
-    endpoint: 'movie',
-    id: req.query.data.id,
-  }
-  getSqlData(sqlInfo)
-    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
-    .then(result => {
-      if (result) { res.send(result.rows); }
-      else {
-        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
+// function getYelps(req, res) {
+//   let sqlInfo = {
+//     endpoint: 'movie',
+//     id: req.query.data.id,
+//   }
+//   getSqlData(sqlInfo)
+//     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+//     .then(result => {
+//       if (result) { res.send(result.rows); }
+//       else {
+//         const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
 
-        superagent.get(apiUrl)
-          .then(apiData => {
-            if (/** api data not available */) {
-              throw 'NO DATA FROM API';
-            } else {
-              /** do something with api data */
-            }
-          });
-      }
-    })
-    .catch(error => handleError(error));
-}
+//         superagent.get(apiUrl)
+//           .then(apiData => {
+//             if (/** api data not available */) {
+//               throw 'NO DATA FROM API';
+//             } else {
+//               /** do something with api data */
+//             }
+//           });
+//       }
+//     })
+//     .catch(error => handleError(error));
+// }
 
 // Event object constructor
 function Event(data){
@@ -325,6 +318,7 @@ function Event(data){
   this.name = data.name;
   this.creation_date = formatTime(data.created);
   this.host = data.group.name;
+  this.created_at = Date.now();
 }
 
 // Location object constructor
@@ -333,6 +327,7 @@ function Location(data, query) {
   this.formatted_query = data.formatted_address;
   this.latitude = data.geometry.location.lat;
   this.longitude = data.geometry.location.lng;
+  this.created_at = Date.now();
 }
 
 // Forecast object constructor
