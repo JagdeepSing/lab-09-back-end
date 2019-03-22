@@ -50,14 +50,11 @@ function handleError(err, res) {
  *  @param {object} sqlInfo, object with keys endpoint and id
  */
 function getSqlData(sqlInfo) {
-  let sql = `SELECT * FROM ${sqlInfo.endpoint}s WHERE $1=$2;`;
-  let values = Object.values(sqlInfo).slice(1);
-
-  console.log('getting sql data for ', sqlInfo.endpoint);
+  let sql = `SELECT * FROM ${sqlInfo.endpoint}s WHERE location_id=$1;`;
+  let values = [sqlInfo.location_id];
 
   // return data
   try {
-    console.log('returning sql data for ', sqlInfo.endpoint);
     return client.query(sql, values);
   } catch(error) {
     handleError(error);
@@ -82,18 +79,15 @@ const timeouts = {
  * @param {object} sqlData
  */
 function checkTimeouts(sqlInfo, sqlData) {
-  console.log('check timeouts ', sqlInfo.endpoint);
   if (sqlData.rowCount > 0) {
     let ageOfResults = Date.now() - sqlData.rows[0].created_at;
 
     if (ageOfResults > timeouts[sqlInfo.endpoint]) {
-      console.log('too old');
       let sql = `DELETE FROM ${sqlInfo.endpoint}s WHERE location_id=$1;`;
       let values = [sqlInfo.location_id];
       client.query(sql, values);
       return;
     }
-    console.log('young');
     return sqlData;
   }
 }
@@ -106,13 +100,10 @@ function checkTimeouts(sqlInfo, sqlData) {
  * @param {object} res, express response
  */
 function getLocation(req, res) {
-  let sqlInfo = {
-    endpoint: 'location',
-    property_name: 'search_query',
-    search_query: req.query.data,
-  }
+  const selectSQL = `SELECT * FROM locations where search_query=$1;`;
+  const values = [req.query.data];
 
-  getSqlData(sqlInfo)
+  client.query(selectSQL, values)
     // .then(sqlData => checkTimeouts(sqlInfo, sqlData))
     .then(result => {
       if (result.rowCount > 0) {
@@ -152,7 +143,6 @@ function getLocation(req, res) {
 function getWeather(req, res) {
   let sqlInfo = {
     endpoint: 'weather',
-    id_name: 'location_id',
     location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
@@ -195,12 +185,10 @@ function getWeather(req, res) {
  *
  * @param {object} req, express request
  * @param {object} res, express response
- * @return {array} array of event objects
  */
 function getMeetups(req, res) {
   let sqlInfo = {
     endpoint: 'meetup',
-    id_name: 'location_id',
     location_id: req.query.data.id,
   }
 
@@ -234,10 +222,18 @@ function getMeetups(req, res) {
     .catch(error => handleError(error));
 }
 
+/**
+ * gets movies related to passed in location and sends it back to user
+ * 
+ * first checks to see if movie data is available in local database
+ * if not, retrieves information from THE MOVIE DB API
+ * 
+ * @param {object} req, request object for express
+ * @param {object} res, response object for express
+ */
 function getMovies(req, res) {
   let sqlInfo = {
     endpoint: 'movie',
-    id_name: 'location_id',
     location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
@@ -245,7 +241,7 @@ function getMovies(req, res) {
     .then(result => {
       if (result) { res.send(result.rows); }
       else {
-        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_DB_API_KEY}&language=en-US&page=1&include_adult=false&query=${req.query.data}`;
+        const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_DB_API_KEY}&language=en-US&page=1&include_adult=false&query=${req.query.data.search_query}`;
 
         superagent.get(apiUrl)
           .then(apiData => {
@@ -270,11 +266,20 @@ function getMovies(req, res) {
     .catch(error => handleError(error));
 }
 
+
+/**
+ * gets business near passed in location and sends it back to user
+ * 
+ * first checks to see if business data is available in local database
+ * if not, retrieves information from YELP API
+ * 
+ * @param {object} req, request object for express
+ * @param {object} res, response object for express
+ */
 function getYelps(req, res) {
   let sqlInfo = {
     endpoint: 'movie',
-    id_name: 'location_id',
-    id: req.query.data.id,
+    location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
@@ -291,7 +296,7 @@ function getYelps(req, res) {
             } else {
               const businesses = apiData.body.businesses.map(store => {
                 let store_info = new Store(store);
-                store_info.id = sqlInfo.id;
+                store_info.id = sqlInfo.location_id;
 
                 let insertSQL = `INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
                 let newValues = Object.values(store_info);
@@ -373,7 +378,7 @@ function Movie(movie) {
   this.overview = movie.overview;
   this.average_votes = movie.vote_average;
   this.total_votes = movie.vote_count;
-  this.image_url = `http://image.tmdb.org/t/p/original${movie.poster_path}`;
+  this.image_url = `http://image.tmdb.org/t/p/w500${movie.poster_path}`;
   this.popularity = movie.popularity;
   this.released_on = movie.release_date;
   this.created_at = Date.now();
