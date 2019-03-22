@@ -14,13 +14,22 @@ This site is being built so that we can get hands on experience with backend sys
 
   step 1: Clone the repository
   
-  step 2: In terminal window, enter 'npm i' and create a '.env' file containing port number, API Keys (Darksky, google maps, meetups) and Postgres database url.
+  step 2: In terminal window, enter 'npm i' 
   
-  step 3: Run nodemon and test routes (location, weather, meetups) and outputs.
+  step 3: Create a '.env' file containing the following
+        PORT=[port number]
+        
+        DARK_SKY_API_KEY=[your api key]
+        GOOGLE_MAPS_API_KEY=[your api key] 
+        MEETUP_API_KEY=[your api key]
+        YELP_API_KEY=[your api key]
+        MOVIE_DB_API_KEY=[your api key]
+
+        DATABASE_URL=[your postgres database url (os dependant)]
   
-  step 4: deploy to a online service like heroku if desired.
+  step 3: Run nodemon and test routes (location, weather, meetups, yelp, movies) and outputs.
   
-  step 5: add postgres to your online service
+  step 4: deploy to a online service like heroku if desired. make sure to add postgres to online service as well
 
 ## Architecture
 
