@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS weathers;
 DROP TABLE IF EXISTS meetUps;
 DROP TABLE IF EXISTS movies;
 DROP TABLE IF EXISTS yelps;
+DROP TABLE IF EXISTS trails;
 DROP TABLE IF EXISTS locations;
 
 CREATE TABLE locations (
@@ -59,5 +60,20 @@ CREATE TABLE yelps (
   FOREIGN KEY (location_id) REFERENCES locations (id)
 );
 
+CREATE TABLE trails (
+  id SERIAL PRIMARY KEY,
+  location VARCHAR(512),
+  length NUMERIC(2,2),
+  stars NUMERIC(2,2),
+  star_votes INTEGER,
+  summary VARCHAR(512),
+  trail_url VARCHAR(512),
+  conditions VARCHAR(255),
+  condition_date VARCHAR(11),
+  condition_time VARCHAR(10),
+  created_at BIGINT,
+  location_id INTEGER NOT NULL,
+  FOREIGN KEY (location_id) REFERENCES locations (id)
+);
 -- to link schema to our database, in repo folder
 -- "psql -f ./data/schema.sql -d city_explorer"

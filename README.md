@@ -14,9 +14,11 @@ This site is being built so that we can get hands on experience with backend sys
 
   step 1: Clone the repository
   
-  step 2: In terminal window, enter 'npm i' 
+  step 2: Make sure npm is installed
   
-  step 3: Create a '.env' file containing the following
+  Step 3: In terminal/command prompt, enter 'npm i' 
+  
+  step 4: Create a '.env' file containing the following
         PORT=[port number]
         
         DARK_SKY_API_KEY=[your api key]
@@ -27,9 +29,9 @@ This site is being built so that we can get hands on experience with backend sys
 
         DATABASE_URL=[your postgres database url (OS dependant)]
   
-  step 3: Run nodemon and test routes (location, weather, meetups, yelp, movies) and outputs.
+  step 5: Run nodemon and test routes (location, weather, meetups, yelp, movies) and outputs.
   
-  step 4: deploy to a online service like heroku if desired. make sure to add postgres to online service as well
+  step 6: deploy to a online service like heroku if desired. make sure to add postgres to online service as well
 
 ## Architecture
 
