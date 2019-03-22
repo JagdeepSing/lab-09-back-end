@@ -24,7 +24,7 @@ client.on('error', err => console.error(err));
 app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/meetups', getMeetups);
-// app.get('/yelp', getYelps);
+app.get('/yelp', getYelps);
 // TODO: app.get('/trails', getTrails);
 app.get('/movies', getMovies);
 
@@ -266,6 +266,44 @@ function getMovies(req, res) {
               res.send(movies);
             }
           });
+      }
+    })
+    .catch(error => handleError(error));
+}
+
+function getYelps(req, res) {
+  let sqlInfo = {
+    endpoint: 'movie',
+    id_name: 'location_id',
+    id: req.query.data.id,
+  }
+  getSqlData(sqlInfo)
+    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+    .then(result => {
+      if (result) { res.send(result.rows); }
+      else {
+        const apiUrl = `https://api.yelp.com/v3/businesses/search?latitude=${req.query.data.latitude}&longitude=${req.query.data.longitude}`;
+
+        superagent.get(apiUrl)
+          .set({'Authorization': `Bearer ${process.env.YELP_API_KEY}`})
+          .then(apiData => {
+            if (!apiData.body.businesses) {
+              throw 'NO DATA FROM API';
+            } else {
+              const businesses = apiData.body.businesses.map(store => {
+                let store_info = new Store(store);
+                store_info.id = sqlInfo.id;
+
+                let insertSQL = `INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+                let newValues = Object.values(store_info);
+
+                client.query(insertSQL, newValues);
+                return store_info;
+              });
+              res.send(businesses);
+            }
+          })
+          .catch(error => handleError(error));
       }
     })
     .catch(error => handleError(error));
