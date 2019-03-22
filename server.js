@@ -374,7 +374,7 @@ function Movie(movie) {
   this.overview = movie.overview;
   this.average_votes = movie.vote_average;
   this.total_votes = movie.vote_count;
-  this.image_url = `https://image.tmdb.org/t/p/w200_and_h300_bestv2${movie.poster_path}`;
+  this.image_url = `http://image.tmdb.org/t/p/original${movie.poster_path}`;
   this.popularity = movie.popularity;
   this.released_on = movie.release_date;
   this.created_at = Date.now();
