@@ -25,7 +25,7 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/meetups', getMeetups);
 app.get('/yelp', getYelps);
-// TODO: app.get('/trails', getTrails);
+// app.get('/trails', getTrails);
 app.get('/movies', getMovies);
 
 // port location of server, once its running

@@ -154,28 +154,28 @@ Number and name of feature: #3: Add Database to Heroku Deployment
 
 Number and name of feature: #1: Add cache invalidation
 
-- Estimate of time needed to complete:
-- Start time:
-- Finish time:
-- Actual time needed to complete:
+- Estimate of time needed to complete: 1h:30m
+- Start time: 9:20am
+- Finish time: 11:00am
+- Actual time needed to complete: 1h:40m
 
 Number and name of feature: #2: Add Movies route
 
-- Estimate of time needed to complete:
-- Start time:
-- Finish time:
-- Actual time needed to complete:
+- Estimate of time needed to complete: 60mins
+- Start time: 11:00am
+- Finish time: 11:50am
+- Actual time needed to complete: 50mins
 
 Number and name of feature: #3: Add Yelp route
 
-- Estimate of time needed to complete:
-- Start time:
-- Finish time:
-- Actual time needed to complete:
+- Estimate of time needed to complete: 40mins
+- Start time: 12:00pm
+- Finish time: 12:30pm
+- Actual time needed to complete: 30 mins
 
 Number and name of feature: #4: Add Trails route
 
-- Estimate of time needed to complete:
+- Estimate of time needed to complete: 
 - Start time:
 - Finish time:
 - Actual time needed to complete:
