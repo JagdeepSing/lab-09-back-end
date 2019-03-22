@@ -25,7 +25,7 @@ This site is being built so that we can get hands on experience with backend sys
         YELP_API_KEY=[your api key]
         MOVIE_DB_API_KEY=[your api key]
 
-        DATABASE_URL=[your postgres database url (os dependant)]
+        DATABASE_URL=[your postgres database url (OS dependant)]
   
   step 3: Run nodemon and test routes (location, weather, meetups, yelp, movies) and outputs.
   
