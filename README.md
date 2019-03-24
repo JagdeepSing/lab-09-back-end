@@ -186,7 +186,7 @@ Number and name of feature: #3: Add Yelp route
 
 Number and name of feature: #4: Add Trails route
 
-- Estimate of time needed to complete: 
-- Start time:
-- Finish time:
-- Actual time needed to complete:
+- Estimate of time needed to complete: 30 mins
+- Start time: 11:30pm
+- Finish time: 12:20am
+- Actual time needed to complete: 50mins
