@@ -62,9 +62,10 @@ CREATE TABLE yelps (
 
 CREATE TABLE trails (
   id SERIAL PRIMARY KEY,
-  location VARCHAR(512),
-  length NUMERIC(2,2),
-  stars NUMERIC(2,2),
+  name VARCHAR(255),
+  location VARCHAR(255),
+  length NUMERIC(4,2),
+  stars NUMERIC(4,2),
   star_votes INTEGER,
   summary VARCHAR(512),
   trail_url VARCHAR(512),

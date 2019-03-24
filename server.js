@@ -25,8 +25,8 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/meetups', getMeetups);
 app.get('/yelp', getYelps);
-// app.get('/trails', getTrails);
 app.get('/movies', getMovies);
+app.get('/trails', getTrails);
 
 // port location of server, once its running
 app.listen(PORT, () => console.log(`Listening on PORT ${PORT}`));
@@ -278,7 +278,7 @@ function getMovies(req, res) {
  */
 function getYelps(req, res) {
   let sqlInfo = {
-    endpoint: 'movie',
+    endpoint: 'yelp',
     location_id: req.query.data.id,
   }
   getSqlData(sqlInfo)
@@ -313,30 +313,50 @@ function getYelps(req, res) {
     .catch(error => handleError(error));
 }
 
-// function getTrails(req, res) {
-//   let sqlInfo = {
-//     endpoint: 'movie',
-//     id: req.query.data.id,
-//   }
-//   getSqlData(sqlInfo)
-//     .then(sqlData => checkTimeouts(sqlInfo, sqlData))
-//     .then(result => {
-//       if (result) { res.send(result.rows); }
-//       else {
-//         const apiUrl = `https://api.themoviedb.org/3/search/movie?api_key=${api_key}&language=en-US&page=1&include_adult=false&query=${location_name}`;
+/**
+ * gets hiking trails near passed-in location and sends it back to user
+ * 
+ * first checks to see if trail data is available in local database
+ * if not, retrieves information from Hiking Project API
+ * 
+ * @param {object} req, request object for express
+ * @param {object} res, response object for express
+ */
+function getTrails(req, res) {
+  let sqlInfo = {
+    endpoint: 'trail',
+    location_id: req.query.data.id,
+  }
+  getSqlData(sqlInfo)
+    .then(sqlData => checkTimeouts(sqlInfo, sqlData))
+    .then(result => {
+      if (result) { res.send(result.rows); }
+      else {
+        const apiUrl = `https://www.hikingproject.com/data/get-trails?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&key=${process.env.TRAILS_API_KEY}`;
 
-//         superagent.get(apiUrl)
-//           .then(apiData => {
-//             if (/** api data not available */) {
-//               throw 'NO DATA FROM API';
-//             } else {
-//               /** do something with api data */
-//             }
-//           });
-//       }
-//     })
-//     .catch(error => handleError(error));
-// }
+        superagent.get(apiUrl)
+          .then(apiData => {
+            if (!apiData.body.trails.length) {
+              throw 'NO DATA FROM TRAILS API';
+            } else {
+              const trails = apiData.body.trails.map(trail => {
+                let trail_info = new Trail(trail);
+                trail_info.location_id = sqlInfo.location_id;
+
+                let insertSQL = `INSERT INTO trails (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`;
+                let newValues = Object.values(trail_info);
+
+                client.query(insertSQL, newValues);
+                return trail_info;
+              });
+              res.send(trails);
+            }
+          })
+          .catch(error => handleError(error));
+      }
+    })
+    .catch(error => handleError(error));
+}
 
 
 // Event object constructor
@@ -381,6 +401,20 @@ function Movie(movie) {
   this.image_url = `http://image.tmdb.org/t/p/w500${movie.poster_path}`;
   this.popularity = movie.popularity;
   this.released_on = movie.release_date;
+  this.created_at = Date.now();
+}
+
+function Trail(trail) {
+  this.name = trail.name;
+  this.location = trail.location;
+  this.length = trail.length;
+  this.stars = trail.stars;
+  this.star_votes = trail.starVotes;
+  this.summary = trail.summary;
+  this.trail_url = trail.url;
+  this.conditions = trail.conditionDetails;
+  this.condition_date = trail.conditionDate.split(' ')[0];
+  this.condition_time = trail.conditionDate.split(' ')[1];
   this.created_at = Date.now();
 }
 
